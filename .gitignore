@@ -1,0 +1,34 @@
+# Local Excel files, builds and order data
+*.xlam
+*.xlsm
+*.xlsx
+*.xls
+*.xlsb
+*.csv
+*.tsv
+~$*
+/DEV/
+/dev/
+/dist/
+/release/
+/data/
+/orders/
+/backups/
+
+# Secrets and machine settings
+.env
+.env.*
+!.env.example
+*.local.*
+*.pem
+*.key
+*.pfx
+*.p12
+
+# Temporary files
+*.log
+*.tmp
+Thumbs.db
+Desktop.ini
+
+# Keep exported VBA source and form resources: .bas .cls .frm .frx
