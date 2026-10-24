@@ -7,6 +7,7 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
     Dim i As Long, outRow As Long, dataSetCount As Long
     Dim startCol As Long, destCol As Long
     Dim tempValue As String
+    Dim rawOID As String
     Dim rawBarcode As String
     Dim encodedBarcode As String
     Dim j As Long
@@ -14,18 +15,25 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
     Dim copyIdx As Long
     Dim colDATE As Long, colSHOP As Long, ColSku As Long, colFN As Long
     Dim rowNum As Long
+    Dim setIndex As Long, fieldCol As Long
 
     cfg = ReadConfig(wb)
     ' Calculate configuration values before validating them.
-    totalCopiesPerSet = cfg.CopyNameA + cfg.CopyNameB + cfg.CopyNameC + cfg.CopyNameD + cfg.CopyBarcode
+    totalCopiesPerSet = cfg.CopyNameA + cfg.CopyNameB + cfg.CopyNameC + cfg.CopyNameD + cfg.CopyOID + cfg.CopyBarcode
 
     If cfg.SetsPerRow <= 0 Then
         MsgBox "Sets per row in A3 must be greater than zero.", vbExclamation
         Exit Sub
     End If
 
+    If cfg.CopyNameA < 0 Or cfg.CopyNameB < 0 Or cfg.CopyNameC < 0 Or _
+       cfg.CopyNameD < 0 Or cfg.CopyOID < 0 Or cfg.CopyBarcode < 0 Then
+        MsgBox "Output copy values in B3:G3 cannot be negative.", vbExclamation
+        Exit Sub
+    End If
+
     If totalCopiesPerSet <= 0 Then
-        MsgBox "At least one output copy value in B3:F3 must be greater than zero.", vbExclamation
+        MsgBox "At least one output copy value in B3:G3 must be greater than zero.", vbExclamation
         Exit Sub
     End If
     Set wsNorm = EnsureNormalizedSheet(wb, cfg)
@@ -45,8 +53,6 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
         Exit Sub
     End If
 
-    wsOutput.rows("2:" & wsOutput.rows.Count).ClearContents
-
     colDATE = GetHeaderColumn(wsOutput, "DATE")
     colSHOP = GetHeaderColumn(wsOutput, "SHOP")
     ColSku = GetHeaderColumn(wsOutput, "SKU")
@@ -57,11 +63,44 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
         Exit Sub
     End If
 
-    lastRow = wsNorm.Cells(wsNorm.rows.Count, "F").End(xlUp).Row
+    ' Check the template before clearing existing output.
+    If cfg.SetsPerRow > wsOutput.Columns.Count \ totalCopiesPerSet Then
+        MsgBox "Configured output exceeds the worksheet column limit.", vbCritical
+        Exit Sub
+    End If
+
+    fieldCol = cfg.SetsPerRow * totalCopiesPerSet
+    If colDATE <= fieldCol Or colSHOP <= fieldCol Or ColSku <= fieldCol Or colFN <= fieldCol Then
+        MsgBox "DATE, SHOP, SKU and FN must follow all configured output sets.", vbCritical
+        Exit Sub
+    End If
+
+    For setIndex = 0 To cfg.SetsPerRow - 1
+        fieldCol = setIndex * totalCopiesPerSet + _
+                   cfg.CopyNameA + cfg.CopyNameB + cfg.CopyNameC + cfg.CopyNameD + 1
+        For j = 1 To cfg.CopyOID
+            If Right$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), 4) <> "-OID" Then
+                MsgBox "Expected an Nx-OID header in column " & fieldCol & ".", vbCritical
+                Exit Sub
+            End If
+            fieldCol = fieldCol + 1
+        Next j
+        For j = 1 To cfg.CopyBarcode
+            If Right$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), 3) <> "-BC" Then
+                MsgBox "Expected an Nx-BC header after OID in column " & fieldCol & ".", vbCritical
+                Exit Sub
+            End If
+            fieldCol = fieldCol + 1
+        Next j
+    Next setIndex
+
+    lastRow = wsNorm.Cells(wsNorm.rows.Count, "G").End(xlUp).Row
     If lastRow < 2 Then
         MsgBox "No normalized data found. Please run Translate Input first.", vbExclamation
         Exit Sub
     End If
+
+    wsOutput.rows("2:" & wsOutput.rows.Count).ClearContents
 
     outRow = 2
     dataSetCount = 0
@@ -69,10 +108,11 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
     For i = 2 To lastRow
         If UCase$(Trim$(CStr(wsNorm.Cells(i, "A").value))) = UCase$(cfg.sku) Then
         
-            copyCount = CLng(Val(wsNorm.Cells(i, "G").value))
+            copyCount = CLng(Val(wsNorm.Cells(i, "H").value))
             If copyCount <= 0 Then copyCount = 1
             
-            rawBarcode = wsNorm.Cells(i, "F").Text
+            rawOID = CStr(wsNorm.Cells(i, "F").value)
+            rawBarcode = CStr(wsNorm.Cells(i, "G").value)
             
             If rawBarcode <> "" Then
                 encodedBarcode = CODE128_LIBRE(rawBarcode)
@@ -110,6 +150,12 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
                 tempValue = wsNorm.Cells(i, "E").value
                 For j = 1 To cfg.CopyNameD
                     wsOutput.Cells(outRow, destCol).value = tempValue
+                    destCol = destCol + 1
+                Next j
+
+                For j = 1 To cfg.CopyOID
+                    wsOutput.Cells(outRow, destCol).NumberFormat = "@"
+                    wsOutput.Cells(outRow, destCol).value = rawOID
                     destCol = destCol + 1
                 Next j
 

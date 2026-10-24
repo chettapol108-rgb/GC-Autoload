@@ -282,7 +282,7 @@ End Sub
 '
 ' Writes one parsed task to the NormalizedInput sheet.
 '
-' The barcode column is forced to Text format to preserve the original
+' OID (F) and Barcode (G) use Text format to preserve the original
 ' order number exactly.
 '------------------------------------------------------------------------------
 Private Sub WriteNormalizedTask( _
@@ -301,7 +301,10 @@ Private Sub WriteNormalizedTask( _
     wsNorm.Cells(outputRow, "F").NumberFormat = "@"
     wsNorm.Cells(outputRow, "F").value = rawBarcode
 
-    wsNorm.Cells(outputRow, "G").value = task("Qty")
+    wsNorm.Cells(outputRow, "G").NumberFormat = "@"
+    wsNorm.Cells(outputRow, "G").value = rawBarcode
+
+    wsNorm.Cells(outputRow, "H").value = task("Qty")
 End Sub
 '------------------------------------------------------------------------------
 ' GetTotalTaskQty

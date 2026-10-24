@@ -14,6 +14,7 @@ Public Type AutoLoadConfig
     CopyNameB As Long
     CopyNameC As Long
     CopyNameD As Long
+    CopyOID As Long
     CopyBarcode As Long
     
     DateYMD As String
@@ -44,11 +45,12 @@ Public Function ReadConfig(ByVal wb As Workbook) As AutoLoadConfig
     cfg.CopyNameB = CLng(Val(ws.Range("C3").value))
     cfg.CopyNameC = CLng(Val(ws.Range("D3").value))
     cfg.CopyNameD = CLng(Val(ws.Range("E3").value))
-    cfg.CopyBarcode = CLng(Val(ws.Range("F3").value))
+    cfg.CopyOID = CLng(Val(ws.Range("F3").value))
+    cfg.CopyBarcode = CLng(Val(ws.Range("G3").value))
     
-    cfg.DateYMD = FormatDateYMD(ws.Range("G3").value)
+    cfg.DateYMD = FormatDateYMD(ws.Range("H3").value)
     cfg.DateMMDD = Mid$(cfg.DateYMD, 5)
-    cfg.ShopCode = GetShopCode(ws.Range("H3").value)
+    cfg.ShopCode = GetShopCode(ws.Range("I3").value)
 
     cfg.FirstDataRow = 5
     
@@ -108,6 +110,15 @@ Public Function EnsureNormalizedSheet(ByVal wb As Workbook, ByRef cfg As AutoLoa
     
     If ws Is Nothing Then
         MsgBox "Sheet '" & cfg.NormalizedSheetName & "' does not exist.", vbCritical
+        Set EnsureNormalizedSheet = Nothing
+        Exit Function
+    End If
+
+    If UCase$(Trim$(CStr(ws.Range("F1").value))) <> "OID" Or _
+       UCase$(Trim$(CStr(ws.Range("G1").value))) <> "BARCODE" Or _
+       UCase$(Trim$(CStr(ws.Range("H1").value))) <> "QTY" Then
+        MsgBox "NormalizedInput must have F1=OID, G1=Barcode and H1=Qty. " & _
+               "Update the template and run Translate Input again.", vbCritical
         Set EnsureNormalizedSheet = Nothing
         Exit Function
     End If

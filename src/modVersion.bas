@@ -1,12 +1,17 @@
 Option Explicit
 
-Public Const GC_AUTOLOAD_VERSION As String = "3.3"
-Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-10-07"
+Public Const GC_AUTOLOAD_VERSION As String = "3.4"
+Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-10-24"
 '==============================================================================
 ' GC AutoLoad
 '==============================================================================
 '
 ' VERSION HISTORY
+' v3.4 - 2026-10-24
+' - Added plain-text OID copies before barcode fields in each output set.
+' - Updated input configuration and normalized OID, Barcode and Qty columns.
+' - Added output template validation before clearing existing SKU data.
+'
 ' v3.3 - 2026-10-07
 ' - Added SKU quantity validation between Raw Input and the Qty column.
 ' - Added detection for quantity mismatches in explicit "*Npcs" SKU declarations.

@@ -18,6 +18,13 @@
 - การจัดเก็บ source code ยังไม่ถือว่าได้ build หรือทดสอบ add-in จาก source เหล่านี้แล้ว
 - ต้องจัดเตรียมและตรวจสอบ Ribbon XML, โค้ด ThisWorkbook/Worksheet, references และกระบวนการ import/build ให้ครบก่อนออก release ถัดไป
 
+## [3.4] - 2026-10-24
+
+### Added
+- เพิ่ม OID เลขออร์เดอร์แบบข้อความก่อน Barcode ในแต่ละชุด โดยอ่านจำนวนสำเนาจาก AutoLoad-Input!F3
+- ปรับ NormalizedInput เป็น F=OID, G=Barcode, H=Qty และย้ายค่าตั้ง Barcode/Date/Platform เป็น G3/H3/I3
+- ตรวจตำแหน่งหัวคอลัมน์ OID/Barcode และคอลัมน์ข้อมูลท้ายชุดก่อนล้างผลลัพธ์เดิมในชีต SKU
+
 ## [3.3] - 2026-10-07
 
 ### Added
