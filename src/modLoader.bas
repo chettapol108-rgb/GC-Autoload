@@ -79,15 +79,15 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
         fieldCol = setIndex * totalCopiesPerSet + _
                    cfg.CopyNameA + cfg.CopyNameB + cfg.CopyNameC + cfg.CopyNameD + 1
         For j = 1 To cfg.CopyOID
-            If Right$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), 4) <> "-OID" Then
-                MsgBox "Expected an Nx-OID header in column " & fieldCol & ".", vbCritical
+            If Right$(Replace$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), "_", "-"), 4) <> "-OID" Then
+                MsgBox "Expected an Nx_OID or Nx-OID header in column " & fieldCol & ".", vbCritical
                 Exit Sub
             End If
             fieldCol = fieldCol + 1
         Next j
         For j = 1 To cfg.CopyBarcode
-            If Right$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), 3) <> "-BC" Then
-                MsgBox "Expected an Nx-BC header after OID in column " & fieldCol & ".", vbCritical
+            If Right$(Replace$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), "_", "-"), 3) <> "-BC" Then
+                MsgBox "Expected an Nx_BC or Nx-BC header after OID in column " & fieldCol & ".", vbCritical
                 Exit Sub
             End If
             fieldCol = fieldCol + 1

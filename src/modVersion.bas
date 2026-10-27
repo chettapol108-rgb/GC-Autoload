@@ -1,12 +1,17 @@
 Option Explicit
 
-Public Const GC_AUTOLOAD_VERSION As String = "3.4"
-Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-10-24"
+Public Const GC_AUTOLOAD_VERSION As String = "3.4.1"
+Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-10-27"
 '==============================================================================
 ' GC AutoLoad
 '==============================================================================
 '
 ' VERSION HISTORY
+' v3.4.1 - 2026-10-27
+' - Fixed output header validation to accept both underscores and hyphens.
+' - Supported Nx_OID / Nx-OID and Nx_BC / Nx-BC header formats.
+' - Preserved column-position checks before clearing existing output.
+'
 ' v3.4 - 2026-10-24
 ' - Added plain-text OID copies before barcode fields in each output set.
 ' - Updated input configuration and normalized OID, Barcode and Qty columns.

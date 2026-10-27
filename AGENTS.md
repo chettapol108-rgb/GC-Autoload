@@ -12,7 +12,7 @@
 - Read implementations before assuming module responsibilities from their names.
 - README.md describes the project. CHANGELOG.md at the root is the canonical changelog.
 - The empty src/CHANGELOG.md is a leftover placeholder, not a second release history.
-- modVersion.bas currently declares version 3.4 and release date 2026-10-24. Recheck it rather than assuming these values remain current.
+- modVersion.bas currently declares version 3.4.1 and release date 2026-10-27. Recheck it rather than assuming these values remain current.
 - Do not assume a complete automated export/import/build pipeline exists. Document missing inputs and tools honestly.
 
 ## VBA changes and file encoding
