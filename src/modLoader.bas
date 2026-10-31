@@ -1,5 +1,32 @@
+Option Explicit
+
 Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
-    Dim cfg As AutoLoadConfig
+    Dim cfg As AutoLoadConfig, wsNorm As Worksheet
+    Dim skus As Object, sku As Variant
+    On Error GoTo Failed
+    cfg = ReadConfig(wb)
+    Set wsNorm = EnsureNormalizedSheet(wb, cfg)
+    If wsNorm Is Nothing Then Exit Sub
+    Set skus = NormalizedSkus(wsNorm)
+    RequireBatch wb, cfg, wsNorm, skus, False
+    SetBatchProperty wsNorm, "GC_BatchLoaded", "NO"
+    ' Preflight all destinations before clearing any of them.
+    For Each sku In skus.Keys
+        ReadSkuConfig wb, cfg, CStr(sku)
+        LoadOneSku wb, cfg, True
+    Next sku
+    For Each sku In skus.Keys
+        ReadSkuConfig wb, cfg, CStr(sku)
+        LoadOneSku wb, cfg, False
+    Next sku
+    SetBatchProperty wsNorm, "GC_BatchLoaded", "YES"
+    MsgBox "Load Data completed. Platform: " & cfg.ShopCode & "; SKUs: " & skus.Count, vbInformation
+    Exit Sub
+Failed:
+    MsgBox "Load Data stopped: " & Err.Description & vbCrLf & "XML export is blocked until Load Data succeeds.", vbExclamation
+End Sub
+
+Private Sub LoadOneSku(ByVal wb As Workbook, ByRef cfg As AutoLoadConfig, ByVal validateOnly As Boolean)
     Dim wsOutput As Worksheet
     Dim wsNorm As Worksheet
     Dim lastRow As Long
@@ -16,32 +43,28 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
     Dim colDATE As Long, colSHOP As Long, ColSku As Long, colFN As Long
     Dim rowNum As Long
     Dim setIndex As Long, fieldCol As Long
+    Dim totalSets As Double
 
-    cfg = ReadConfig(wb)
     ' Calculate configuration values before validating them.
     totalCopiesPerSet = cfg.CopyNameA + cfg.CopyNameB + cfg.CopyNameC + cfg.CopyNameD + cfg.CopyOID + cfg.CopyBarcode
 
     If cfg.SetsPerRow <= 0 Then
-        MsgBox "Sets per row in A3 must be greater than zero.", vbExclamation
-        Exit Sub
+        Err.Raise vbObjectError + 2200, , "Invalid sets per row for SKU: " & cfg.sku
     End If
 
     If cfg.CopyNameA < 0 Or cfg.CopyNameB < 0 Or cfg.CopyNameC < 0 Or _
        cfg.CopyNameD < 0 Or cfg.CopyOID < 0 Or cfg.CopyBarcode < 0 Then
-        MsgBox "Output copy values in B3:G3 cannot be negative.", vbExclamation
-        Exit Sub
+        Err.Raise vbObjectError + 2201, , "Negative copy count for SKU: " & cfg.sku
     End If
 
     If totalCopiesPerSet <= 0 Then
-        MsgBox "At least one output copy value in B3:G3 must be greater than zero.", vbExclamation
-        Exit Sub
+        Err.Raise vbObjectError + 2202, , "No output copies for SKU: " & cfg.sku
     End If
     Set wsNorm = EnsureNormalizedSheet(wb, cfg)
-    If wsNorm Is Nothing Then Exit Sub
+    If wsNorm Is Nothing Then Err.Raise vbObjectError + 2203, , "Invalid NormalizedInput schema."
     
     If cfg.sku = "" Then
-        MsgBox "SKU name in B1 is empty.", vbExclamation
-        Exit Sub
+        Err.Raise vbObjectError + 2204, , "Empty SKU."
     End If
 
     On Error Resume Next
@@ -49,8 +72,7 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
     On Error GoTo 0
     
     If wsOutput Is Nothing Then
-        MsgBox "Sheet '" & cfg.sku & "' does not exist.", vbCritical
-        Exit Sub
+        Err.Raise vbObjectError + 2205, , "Sheet '" & cfg.sku & "' does not exist."
     End If
 
     colDATE = GetHeaderColumn(wsOutput, "DATE")
@@ -59,20 +81,17 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
     colFN = GetHeaderColumn(wsOutput, "FN")
 
     If colDATE = 0 Or colSHOP = 0 Or ColSku = 0 Or colFN = 0 Then
-        MsgBox "Missing required output columns: DATE, SHOP, SKU, or FN.", vbCritical
-        Exit Sub
+        Err.Raise vbObjectError + 2206, , cfg.sku & ": Missing DATE, SHOP, SKU or FN."
     End If
 
     ' Check the template before clearing existing output.
     If cfg.SetsPerRow > wsOutput.Columns.Count \ totalCopiesPerSet Then
-        MsgBox "Configured output exceeds the worksheet column limit.", vbCritical
-        Exit Sub
+        Err.Raise vbObjectError + 2207, , cfg.sku & ": Output exceeds the worksheet column limit."
     End If
 
     fieldCol = cfg.SetsPerRow * totalCopiesPerSet
     If colDATE <= fieldCol Or colSHOP <= fieldCol Or ColSku <= fieldCol Or colFN <= fieldCol Then
-        MsgBox "DATE, SHOP, SKU and FN must follow all configured output sets.", vbCritical
-        Exit Sub
+        Err.Raise vbObjectError + 2208, , cfg.sku & ": DATE, SHOP, SKU and FN must follow all output sets."
     End If
 
     For setIndex = 0 To cfg.SetsPerRow - 1
@@ -80,15 +99,13 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
                    cfg.CopyNameA + cfg.CopyNameB + cfg.CopyNameC + cfg.CopyNameD + 1
         For j = 1 To cfg.CopyOID
             If Right$(Replace$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), "_", "-"), 4) <> "-OID" Then
-                MsgBox "Expected an Nx_OID or Nx-OID header in column " & fieldCol & ".", vbCritical
-                Exit Sub
+                Err.Raise vbObjectError + 2209, , cfg.sku & ": Expected Nx_OID or Nx-OID in column " & fieldCol
             End If
             fieldCol = fieldCol + 1
         Next j
         For j = 1 To cfg.CopyBarcode
             If Right$(Replace$(UCase$(Trim$(CStr(wsOutput.Cells(1, fieldCol).value))), "_", "-"), 3) <> "-BC" Then
-                MsgBox "Expected an Nx_BC or Nx-BC header after OID in column " & fieldCol & ".", vbCritical
-                Exit Sub
+                Err.Raise vbObjectError + 2210, , cfg.sku & ": Expected Nx_BC or Nx-BC in column " & fieldCol
             End If
             fieldCol = fieldCol + 1
         Next j
@@ -96,9 +113,23 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
 
     lastRow = wsNorm.Cells(wsNorm.rows.Count, "G").End(xlUp).Row
     If lastRow < 2 Then
-        MsgBox "No normalized data found. Please run Translate Input first.", vbExclamation
-        Exit Sub
+        Err.Raise vbObjectError + 2211, , "No normalized data. Run Translate Input first."
     End If
+
+    If wsOutput.ProtectContents Then Err.Raise vbObjectError + 2212, , "Protected output sheet: " & cfg.sku
+    For i = 2 To lastRow
+        If StrComp(Trim$(CStr(wsNorm.Cells(i, "A").Value2)), cfg.sku, vbTextCompare) = 0 Then
+            copyCount = CLng(Val(wsNorm.Cells(i, "H").Value2))
+            If copyCount <= 0 Then Err.Raise vbObjectError + 2213, , "Invalid normalized Qty on row " & i
+            totalSets = totalSets + copyCount
+            ' Validate barcode encoding before clearing destinations.
+            If cfg.CopyBarcode > 0 Then encodedBarcode = CODE128_LIBRE(CStr(wsNorm.Cells(i, "G").Value2))
+        End If
+    Next i
+    If totalSets = 0 Or totalSets > CDbl(wsOutput.Rows.Count - 1) * cfg.SetsPerRow Then
+        Err.Raise vbObjectError + 2214, , "Invalid output row count for SKU: " & cfg.sku
+    End If
+    If validateOnly Then Exit Sub
 
     wsOutput.rows("2:" & wsOutput.rows.Count).ClearContents
 
@@ -114,7 +145,7 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
             rawOID = CStr(wsNorm.Cells(i, "F").value)
             rawBarcode = CStr(wsNorm.Cells(i, "G").value)
             
-            If rawBarcode <> "" Then
+            If rawBarcode <> "" And cfg.CopyBarcode > 0 Then
                 encodedBarcode = CODE128_LIBRE(rawBarcode)
             Else
                 encodedBarcode = ""
@@ -176,9 +207,6 @@ Public Sub LoadData_ToSKUSheet(ByVal wb As Workbook)
         wsOutput.Cells(rowNum, colFN).value = cfg.DateMMDD & "-" & cfg.ShopCode & "-" & cfg.sku & "-" & Format$(rowNum - 1, "00")
     Next rowNum
 
-    MsgBox "Data loading completed to sheet '" & cfg.sku & "'." & vbCrLf & _
-           "Total sets loaded: " & dataSetCount & vbCrLf & _
-           "Rows written: " & (outRow - 1), vbInformation
 End Sub
 
 
@@ -188,7 +216,7 @@ Public Sub ClearData_BySKU(ByVal wb As Workbook)
     Dim cfg As AutoLoadConfig
 
     cfg = ReadConfig(wb)
-    skuName = cfg.sku
+    skuName = Trim$(CStr(wb.Worksheets(cfg.InputSheetName).Range("B1").Value2))
 
     If skuName = "" Then
         MsgBox "SKU name in cell B1 is empty.", vbExclamation
@@ -205,6 +233,7 @@ Public Sub ClearData_BySKU(ByVal wb As Workbook)
     End If
 
     ws.rows("2:" & ws.rows.Count).ClearContents
+    SetBatchProperty wb.Worksheets(cfg.NormalizedSheetName), "GC_BatchLoaded", "NO"
 
     MsgBox "Data from row 2 down in sheet '" & skuName & _
            "' has been cleared.", vbInformation

@@ -1,12 +1,18 @@
 Option Explicit
 
-Public Const GC_AUTOLOAD_VERSION As String = "3.4.1"
-Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-10-27"
+Public Const GC_AUTOLOAD_VERSION As String = "3.5.0"
+Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-10-31"
 '==============================================================================
 ' GC AutoLoad
 '==============================================================================
 '
 ' VERSION HISTORY
+' v3.5.0 - 2026-10-31
+' - Added multi-SKU processing with SP, TT and ALL platform selection.
+' - Read per-SKU settings from Database and route output to each SKU sheet.
+' - Export separate XML files for all SKUs in the loaded batch.
+' - User reported testing passed; promoted from beta to stable.
+'
 ' v3.4.1 - 2026-10-27
 ' - Fixed output header validation to accept both underscores and hyphens.
 ' - Supported Nx_OID / Nx-OID and Nx_BC / Nx-BC header formats.

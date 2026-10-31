@@ -13,7 +13,7 @@ Option Explicit
 ' 5. Parsed quantity must equal the summed order quantity.
 ' 6. A group is written only when validation succeeds.
 '
-' Platform is not used for parsing logic.
+' Platform filters source rows before grouping; parsing grammar is unchanged.
 '------------------------------------------------------------------------------
 Public Sub TranslateRawInput_ToNormalizedRows(ByVal wb As Workbook)
 
@@ -40,25 +40,19 @@ Public Sub TranslateRawInput_ToNormalizedRows(ByVal wb As Workbook)
     Dim errors As Collection
     
     Dim declaredSkuQty As Long
+    Dim skus As Object, sku As Variant
 
+    On Error GoTo Failed
+    Set wsNorm = wb.Worksheets("NormalizedInput")
+    SetBatchProperty wsNorm, "GC_BatchReady", "NO"
+    SetBatchProperty wsNorm, "GC_BatchLoaded", "NO"
     cfg = ReadConfig(wb)
+    ValidateBatchInput wb, cfg
 
     Set wsInput = wb.Worksheets(cfg.InputSheetName)
     Set wsNorm = EnsureNormalizedSheet(wb, cfg)
 
     If wsNorm Is Nothing Then Exit Sub
-
-    If Trim$(cfg.sku) = "" Then
-
-        MsgBox _
-            "No target SKU selected." & vbCrLf & vbCrLf & _
-            "Please select the correct SKU in cell B1.", _
-            vbExclamation, _
-            "GC AutoLoad"
-
-        Exit Sub
-
-    End If
 
     lastRow = FindLastInputRow(wsInput, cfg)
 
@@ -73,33 +67,35 @@ Public Sub TranslateRawInput_ToNormalizedRows(ByVal wb As Workbook)
 
     End If
 
-    ' Clear previous normalized output.
-    wsNorm.rows("2:" & wsNorm.rows.Count).ClearContents
-
-    ' Clear previous error highlighting.
-    ClearAllInputErrors wsInput, cfg, lastRow
-
     Set groups = BuildOrderSkuGroups(wsInput, cfg, lastRow)
     Set errors = New Collection
+    Set skus = CreateObject("Scripting.Dictionary")
+    skus.CompareMode = vbTextCompare
+    For Each groupKey In groups.Keys
+        Set group = groups(groupKey)
+        skus(CStr(group("SKU"))) = True
+    Next groupKey
+    ' Resolve every SKU before replacing the previous normalized output.
+    For Each sku In skus.Keys
+        ReadSkuConfig wb, cfg, CStr(sku)
+    Next sku
 
     '----------------------------------------------------------------------
-    ' No rows match the SKU selected in B1.
+    ' No rows match the selected platform.
     '----------------------------------------------------------------------
     If groups.Count = 0 Then
 
         MsgBox _
-            "No input rows were found for SKU:" & vbCrLf & vbCrLf & _
-            cfg.sku & vbCrLf & vbCrLf & _
-            "Please check:" & vbCrLf & _
-            "- SKU selected in cell B1" & vbCrLf & _
-            "- SKU values in column A", _
+            "No input rows were found for platform " & cfg.ShopCode & ".", _
             vbCritical, _
-            "GC AutoLoad - SKU mismatch"
+            "GC AutoLoad - Platform filter"
 
         Exit Sub
 
     End If
 
+    wsNorm.rows("2:" & wsNorm.rows.Count).ClearContents
+    ClearAllInputErrors wsInput, cfg, lastRow
     outRow = 2
 
     '----------------------------------------------------------------------
@@ -108,6 +104,7 @@ Public Sub TranslateRawInput_ToNormalizedRows(ByVal wb As Workbook)
     For Each groupKey In groups.Keys
 
         Set group = groups(groupKey)
+        ReadSkuConfig wb, cfg, CStr(group("SKU"))
 
         barcode = CStr(group("Barcode"))
         rawText = CStr(group("RawText"))
@@ -265,16 +262,22 @@ NextGroup:
 
     Else
 
+        Set skus = NormalizedSkus(wsNorm)
+        SetBatchProperty wsNorm, "GC_BatchConfig", BatchConfigKey(wb, cfg, skus)
+        SetBatchProperty wsNorm, "GC_BatchReady", "YES"
+
         MsgBox _
             "Translate completed successfully." & vbCrLf & vbCrLf & _
-            "SKU: " & cfg.sku & vbCrLf & _
+            "Platform: " & cfg.ShopCode & "; SKUs: " & skus.Count & vbCrLf & _
             "Orders processed: " & groups.Count & vbCrLf & _
             "Rows created in NormalizedInput: " & (outRow - 2), _
             vbInformation, _
             "GC AutoLoad"
 
     End If
-
+    Exit Sub
+Failed:
+    MsgBox "Translate stopped: " & Err.Description, vbExclamation, "GC AutoLoad"
 End Sub
 
 '------------------------------------------------------------------------------
@@ -357,7 +360,7 @@ End Function
 '
 ' Groups all input rows by Order ID + SKU.
 '
-' For the currently selected SKU:
+' For all SKUs in the selected platform:
 ' - All rows belonging to the same Order ID are combined.
 ' - Qty values are summed into ExpectedQty.
 ' - Raw Input is stored once because duplicated order rows normally contain
@@ -390,6 +393,8 @@ Private Function BuildOrderSkuGroups(ByVal wsInput As Worksheet, ByRef cfg As Au
 
     For r = cfg.FirstDataRow To lastRow
 
+        ' Excluded platforms must not affect validation or grouping.
+        If MatchesPlatform(wsInput.Cells(r, cfg.ColPlatform).Value2, cfg.ShopCode) Then
         rowSku = Trim$(CStr(wsInput.Cells(r, cfg.ColSku).value))
 
         barcode = Trim$(CStr(wsInput.Cells(r, cfg.ColBarcode).Text))
@@ -398,8 +403,12 @@ Private Function BuildOrderSkuGroups(ByVal wsInput As Worksheet, ByRef cfg As Au
 
         qty = CLng(Val(wsInput.Cells(r, cfg.ColQty).value))
 
-        ' Only process rows belonging to the selected SKU.
-        If StrComp(rowSku, cfg.sku, vbTextCompare) = 0 Then
+            If rowSku = "" And (barcode <> "" Or rawText <> "") Then
+                Err.Raise vbObjectError + 2111, , "Missing SKU on input row " & r
+            End If
+            If rowSku <> "" And barcode = "" Then
+                Err.Raise vbObjectError + 2112, , "Missing Order ID on input row " & r
+            End If
 
             If barcode <> "" Then
 

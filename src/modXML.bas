@@ -1,44 +1,96 @@
+Option Explicit
+
 Public Sub ExportXML_UTF8_BySKU(ByVal wb As Workbook)
-    Dim ws As Worksheet
+    Dim cfg As AutoLoadConfig, wsNorm As Worksheet, ws As Worksheet
+    Dim skus As Object, documents As Object, sku As Variant
+    Dim picker As Object, fso As Object, stream As Object
+    Dim folder As String, baseFolder As String, suffix As Long, written As Long
+    Dim failure As String
+    On Error GoTo Failed
+    cfg = ReadConfig(wb)
+    Set wsNorm = EnsureNormalizedSheet(wb, cfg)
+    If wsNorm Is Nothing Then Exit Sub
+    Set skus = NormalizedSkus(wsNorm)
+    RequireBatch wb, cfg, wsNorm, skus, True
+    Set documents = CreateObject("Scripting.Dictionary")
+    ' Build every document before creating files; never scan unrelated SKU sheets.
+    For Each sku In skus.Keys
+        ValidateSkuFileName CStr(sku)
+        Set ws = wb.Worksheets(CStr(sku))
+        documents.Add CStr(sku), BuildSkuXML(ws)
+    Next sku
+    Set picker = Application.FileDialog(4) ' msoFileDialogFolderPicker
+    picker.Title = "Select a folder for all SKU XML files"
+    If picker.Show <> -1 Then Exit Sub
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    baseFolder = fso.BuildPath(picker.SelectedItems(1), "AutoLoad-" & cfg.ShopCode & "-" & Format$(Now, "yyyymmdd-hhnnss"))
+    folder = baseFolder
+    Do While fso.FolderExists(folder) Or fso.FileExists(folder)
+        suffix = suffix + 1
+        folder = baseFolder & "-" & suffix
+    Loop
+    fso.CreateFolder folder
+    For Each sku In skus.Keys
+        Set stream = CreateObject("ADODB.Stream")
+        stream.Type = 2
+        stream.Charset = "utf-8"
+        stream.Open
+        stream.WriteText documents(CStr(sku))
+        stream.SaveToFile fso.BuildPath(folder, CStr(sku) & ".xml"), 1 ' Never overwrite.
+        stream.Close
+        Set stream = Nothing
+        written = written + 1
+    Next sku
+    MsgBox "XML export completed. Platform: " & cfg.ShopCode & "; Files: " & written & vbCrLf & folder, vbInformation
+    Exit Sub
+Failed:
+    failure = Err.Description
+    On Error Resume Next
+    If Not stream Is Nothing Then stream.Close
+    On Error GoTo 0
+    MsgBox "XML export stopped: " & failure & vbCrLf & "Files written: " & written & vbCrLf & folder, vbExclamation
+End Sub
+
+Private Sub ValidateSkuFileName(ByVal sku As String)
+    Dim ch As Variant, stem As String
+    For Each ch In Array("\", "/", ":", "*", "?", """", "<", ">", "|")
+        If InStr(sku, CStr(ch)) > 0 Then Err.Raise vbObjectError + 2300, , "Invalid XML filename for SKU: " & sku
+    Next ch
+    stem = UCase$(Split(sku, ".")(0))
+    If stem = "CON" Or stem = "PRN" Or stem = "AUX" Or stem = "NUL" Or _
+       stem Like "COM#" Or stem Like "LPT#" Then
+        Err.Raise vbObjectError + 2301, , "Reserved XML filename for SKU: " & sku
+    End If
+End Sub
+
+Private Function BuildSkuXML(ByVal ws As Worksheet) As String
     Dim lastRow As Long, lastCol As Long
     Dim rowIdx As Long, colIdx As Long
     Dim xmlContent As String
-    Dim fileName As Variant
-    Dim UTFStream As Object
     Dim variableNames() As String
     Dim i As Long
-    Dim skuName As String
-    Dim cfg As AutoLoadConfig
     Dim cellValue As String
     Dim varName As String
-
-    cfg = ReadConfig(wb)
-
-    ' Set input worksheet to read SKU name
-    skuName = cfg.sku
-
-    If skuName = "" Then
-        MsgBox "SKU name in cell B1 is empty.", vbExclamation
-        Exit Sub
-    End If
-
-    ' Set worksheet based on SKU name
-    On Error Resume Next
-    Set ws = wb.Sheets(skuName)
-    On Error GoTo 0
-    If ws Is Nothing Then
-        MsgBox "Sheet '" & skuName & "' does not exist.", vbCritical
-        Exit Sub
-    End If
+    Dim names As Object, re As Object, lastCell As Range
 
     ' Find last used row and column
-    lastRow = ws.Cells(ws.rows.Count, 1).End(xlUp).Row
+    Set lastCell = ws.Cells.Find(What:="*", After:=ws.Cells(1, 1), LookIn:=xlValues, _
+                               LookAt:=xlPart, SearchOrder:=xlByRows, SearchDirection:=xlPrevious, MatchCase:=False)
+    If lastCell Is Nothing Then Err.Raise vbObjectError + 2302, , "Empty output sheet: " & ws.Name
+    lastRow = lastCell.Row
+    If lastRow < 2 Then Err.Raise vbObjectError + 2303, , "No loaded data for SKU: " & ws.Name
     lastCol = ws.Cells(1, ws.Columns.Count).End(xlToLeft).Column
 
     ' Read variable names from Row 1
     ReDim variableNames(1 To lastCol)
+    Set names = CreateObject("Scripting.Dictionary")
+    Set re = CreateObject("VBScript.RegExp")
+    re.Pattern = "^[A-Za-z_][A-Za-z0-9_.-]*$"
     For i = 1 To lastCol
         variableNames(i) = Trim$(CStr(ws.Cells(1, i).value))
+        If Not re.Test(variableNames(i)) Then Err.Raise vbObjectError + 2304, , "Invalid XML variable in " & ws.Name & ", column " & i
+        If names.Exists(variableNames(i)) Then Err.Raise vbObjectError + 2305, , "Duplicate XML variable: " & variableNames(i)
+        names.Add variableNames(i), True
     Next i
 
     ' Build XML header exactly like Illustrator export
@@ -110,21 +162,8 @@ Public Sub ExportXML_UTF8_BySKU(ByVal wb As Workbook)
     xmlContent = xmlContent & "</variableSets>" & vbCrLf
     xmlContent = xmlContent & "</svg>" & vbCrLf
 
-    ' Prompt for file name (default to SKU name)
-    fileName = Application.GetSaveAsFilename(skuName & ".xml", "XML Files (*.xml), *.xml")
-    If fileName = False Then Exit Sub
-
-    ' Create UTF-8 encoded file using ADODB.Stream
-    Set UTFStream = CreateObject("ADODB.Stream")
-    UTFStream.Type = 2 ' Text
-    UTFStream.Charset = "utf-8"
-    UTFStream.Open
-    UTFStream.WriteText xmlContent
-    UTFStream.SaveToFile fileName, 2
-    UTFStream.Close
-
-    MsgBox "Export completed from sheet '" & skuName & "'!" & vbCrLf & fileName, vbInformation
-End Sub
+    BuildSkuXML = xmlContent
+End Function
 '------------------------------------------------------------------------------
 ' CleanXMLText
 '

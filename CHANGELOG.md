@@ -18,6 +18,21 @@
 - การจัดเก็บ source code ยังไม่ถือว่าได้ build หรือทดสอบ add-in จาก source เหล่านี้แล้ว
 - ต้องจัดเตรียมและตรวจสอบ Ribbon XML, โค้ด ThisWorkbook/Worksheet, references และกระบวนการ import/build ให้ครบก่อนออก release ถัดไป
 
+## [3.5.0] - 2026-10-31
+
+### Changed
+- ตั้ง source version เป็น 3.5.0 หลังผู้ใช้แจ้งว่าทดสอบผ่านแล้ว; Ribbon ใช้เลขรุ่นจาก modVersion.bas
+- Translate Input ประมวลผลทุก SKU ใน input ของ platform ที่เลือกใน I3: SP เฉพาะ Shopee; TT สำหรับค่าอื่นที่ไม่ใช่ Shopee; ALL สำหรับทุกแถวโดยไม่กรอง platform แล้วรวม Order ID + SKU และใช้กติกาแปลชื่อ/ตรวจจำนวนเดิม
+- ปรับ input แถว 5 เป็นต้นไปเป็น A=SKU, B=Order ID, C=PLATFORM, D=จำนวน, E=Raw Input และอ่านจำนวนชุด/สำเนาจาก Database ของแต่ละ SKU โดยตรง
+- Load Data ตรวจชีตปลายทางของทุก SKU ในรอบก่อนล้างและกระจายข้อมูลตามค่าตั้งของแต่ละ SKU
+- Export XML เลือกโฟลเดอร์ครั้งเดียว สร้างโฟลเดอร์รอบใหม่และไฟล์แยกต่อ SKU เฉพาะข้อมูลที่ Load สำเร็จในรอบนั้น
+- บันทึกสถานะรอบใน NormalizedInput CustomProperties และบังคับ Translate ใหม่เมื่อเปลี่ยน platform, วันที่ หรือค่าตั้ง Database; ข้อผิดพลาดจาก Translate/Load จะบล็อกขั้นตอนถัดไป
+
+### Validation
+- เพิ่มชุดทดสอบ VBA ด้วยข้อมูลสมมติและรายการตรวจ XML/Ribbon สำหรับรันใน Excel แยกจาก production
+- ผู้ใช้แจ้งว่าทดสอบผ่านแล้วและอนุมัติให้ถอดสถานะ beta ในวันที่ 2026-10-31 โดยไม่ได้ระบุผลทดสอบแยกรายกรณี
+- Codex ไม่ได้ Compile หรือรันชุดทดสอบผ่าน automation เนื่องจากเข้าถึง VBProject ไม่ได้; การปรับรุ่นนี้ไม่ได้สร้าง binary, ติดตั้ง หรือเผยแพร่ add-in
+
 ## [3.4.1] - 2026-10-27
 
 ### Fixed
