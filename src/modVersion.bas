@@ -1,12 +1,18 @@
 Option Explicit
 
-Public Const GC_AUTOLOAD_VERSION As String = "3.5.0"
-Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-10-31"
+Public Const GC_AUTOLOAD_VERSION As String = "3.5.1"
+Public Const GC_AUTOLOAD_RELEASE_DATE As String = "2026-11-01"
 '==============================================================================
 ' GC AutoLoad
 '==============================================================================
 '
 ' VERSION HISTORY
+' v3.5.1 - 2026-11-01
+' - Moved Date/Platform to A2/B2, input headers to row 3 and data to row 4.
+' - Removed the input SKU selector and copy-count previews.
+' - Clear Data now clears every SKU sheet listed in Database.
+' - User reported the updated workflow works.
+'
 ' v3.5.0 - 2026-10-31
 ' - Added multi-SKU processing with SP, TT and ALL platform selection.
 ' - Read per-SKU settings from Database and route output to each SKU sheet.

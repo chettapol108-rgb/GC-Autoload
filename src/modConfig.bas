@@ -38,11 +38,11 @@ Public Function ReadConfig(ByVal wb As Workbook) As AutoLoadConfig
     
     Set ws = wb.Sheets(cfg.InputSheetName)
     
-    cfg.DateYMD = FormatDateYMD(ws.Range("H3").value)
+    cfg.DateYMD = FormatDateYMD(ws.Range("A2").value)
     cfg.DateMMDD = Mid$(cfg.DateYMD, 5)
-    cfg.ShopCode = GetShopCode(ws.Range("I3").value)
+    cfg.ShopCode = GetShopCode(ws.Range("B2").value)
 
-    cfg.FirstDataRow = 5
+    cfg.FirstDataRow = 4
     
     cfg.ColSku = "A"
     cfg.ColBarcode = "B"
@@ -53,7 +53,7 @@ Public Function ReadConfig(ByVal wb As Workbook) As AutoLoadConfig
     ReadConfig = cfg
 End Function
 
-' Batch processing reads B:H directly from Database; B1 and A3:G3 are previews only.
+' Batch processing reads B:H directly from Database; no SKU selector is required.
 Public Sub ReadSkuConfig(ByVal wb As Workbook, ByRef cfg As AutoLoadConfig, ByVal sku As String)
     Dim ws As Worksheet, r As Long, foundRow As Long, c As Long
     Dim headers As Variant
@@ -103,13 +103,13 @@ Public Sub ValidateBatchInput(ByVal wb As Workbook, ByRef cfg As AutoLoadConfig)
     Dim qtyHeader As String
     Set ws = wb.Worksheets(cfg.InputSheetName)
     If cfg.ShopCode <> "SP" And cfg.ShopCode <> "TT" And cfg.ShopCode <> "ALL" Then
-        Err.Raise vbObjectError + 2105, , "Select SP, TT or ALL in AutoLoad-Input!I3, then run Translate Input."
+        Err.Raise vbObjectError + 2105, , "Select SP, TT or ALL in AutoLoad-Input!B2, then run Translate Input."
     End If
-    qtyHeader = UCase$(Trim$(CStr(ws.Range("D4").Value2)))
-    If UCase$(Trim$(CStr(ws.Range("C4").Value2))) <> "PLATFORM" Or _
+    qtyHeader = UCase$(Trim$(CStr(ws.Range("D3").Value2)))
+    If UCase$(Trim$(CStr(ws.Range("C3").Value2))) <> "PLATFORM" Or _
        (qtyHeader <> "QTY" And qtyHeader <> ChrW(&HE08) & ChrW(&HE33) & ChrW(&HE19) & ChrW(&HE27) & ChrW(&HE19)) Or _
-       UCase$(Trim$(CStr(ws.Range("E4").Value2))) <> "RAW INPUT" Then
-        Err.Raise vbObjectError + 2106, , "Input row 4 must have C=PLATFORM, D=Qty, E=Raw Input."
+       UCase$(Trim$(CStr(ws.Range("E3").Value2))) <> "RAW INPUT" Then
+        Err.Raise vbObjectError + 2106, , "Input row 3 must have C=PLATFORM, D=Qty, E=Raw Input."
     End If
 End Sub
 

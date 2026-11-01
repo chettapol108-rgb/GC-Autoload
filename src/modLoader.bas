@@ -211,32 +211,48 @@ End Sub
 
 
 Public Sub ClearData_BySKU(ByVal wb As Workbook)
-    Dim ws As Worksheet
-    Dim skuName As String
-    Dim cfg As AutoLoadConfig
+    Dim ws As Worksheet, wsNorm As Worksheet, wsDatabase As Worksheet
+    Dim skus As Object, sku As Variant
+    Dim r As Long, skuName As String
 
-    cfg = ReadConfig(wb)
-    skuName = Trim$(CStr(wb.Worksheets(cfg.InputSheetName).Range("B1").Value2))
-
-    If skuName = "" Then
-        MsgBox "SKU name in cell B1 is empty.", vbExclamation
+    On Error GoTo Failed
+    Set wsDatabase = wb.Worksheets("Database")
+    Set wsNorm = wb.Worksheets("NormalizedInput")
+    If StrComp(Trim$(CStr(wsDatabase.Range("A1").Value2)), "SKU", vbTextCompare) <> 0 Then
+        Err.Raise vbObjectError + 2216, , "Database!A1 must be SKU."
+    End If
+    Set skus = CreateObject("Scripting.Dictionary")
+    skus.CompareMode = vbTextCompare
+    For r = 2 To wsDatabase.Cells(wsDatabase.Rows.Count, "A").End(xlUp).Row
+        skuName = Trim$(CStr(wsDatabase.Cells(r, "A").Value2))
+        If skuName <> "" Then skus(skuName) = True
+    Next r
+    If skus.Count = 0 Then
+        MsgBox "No SKUs found in Database.", vbExclamation
         Exit Sub
     End If
-
-    On Error Resume Next
-    Set ws = wb.Sheets(skuName)
-    On Error GoTo 0
-
-    If ws Is Nothing Then
-        MsgBox "Sheet '" & skuName & "' does not exist.", vbCritical
-        Exit Sub
-    End If
-
-    ws.rows("2:" & ws.rows.Count).ClearContents
-    SetBatchProperty wb.Worksheets(cfg.NormalizedSheetName), "GC_BatchLoaded", "NO"
-
-    MsgBox "Data from row 2 down in sheet '" & skuName & _
-           "' has been cleared.", vbInformation
+    ' Preflight all Database SKU sheets, independent of input and batch state.
+    For Each sku In skus.Keys
+        Select Case UCase$(CStr(sku))
+            Case "DATABASE", "AUTOLOAD-INPUT", "NORMALIZEDINPUT", "VERSION"
+                Err.Raise vbObjectError + 2217, , "Reserved worksheet name in Database SKU list: " & CStr(sku)
+        End Select
+        Set ws = wb.Worksheets(CStr(sku))
+        If ws.ProtectContents Then Err.Raise vbObjectError + 2215, , "Protected output sheet: " & CStr(sku)
+        If GetHeaderColumn(ws, "DATE") = 0 Or GetHeaderColumn(ws, "SHOP") = 0 Or _
+           GetHeaderColumn(ws, "SKU") = 0 Or GetHeaderColumn(ws, "FN") = 0 Then
+            Err.Raise vbObjectError + 2218, , "Invalid SKU output sheet: " & CStr(sku)
+        End If
+    Next sku
+    SetBatchProperty wsNorm, "GC_BatchLoaded", "NO"
+    For Each sku In skus.Keys
+        Set ws = wb.Worksheets(CStr(sku))
+        ws.rows("2:" & ws.rows.Count).ClearContents
+    Next sku
+    MsgBox "Data cleared for all Database SKUs. Sheets: " & skus.Count, vbInformation
+    Exit Sub
+Failed:
+    MsgBox "Clear Data stopped: " & Err.Description, vbExclamation
 End Sub
 
 Private Function GetHeaderColumn(ws As Worksheet, ByVal headerName As String) As Long
